@@ -14,4 +14,7 @@ NVCC=/usr/local/cuda/bin/nvcc
 
 
 warp:
-	$(NVCC) ./test_unit.cpp warp_test.cu  $(cutlass_flag)  -lgtest
+	$(NVCC) ./test_unit.cpp warp_test.cu  $(cutlass_flag)  -lgtest -g
+
+threadblock:
+	$(NVCC) ./test_unit.cpp threadblock_test.cu  $(cutlass_flag)  -lgtest -g

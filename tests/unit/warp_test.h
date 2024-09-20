@@ -275,46 +275,41 @@ namespace onebit
                 // initialize device memory
                 //
 
-                // if (init_A == cutlass::Distribution::Uniform)
-                // {
-                //     int scope_max = 8;
-                //     int scope_min = -8;
+                if (init_A == cutlass::Distribution::Uniform)
+                {
+                    int scope_max = 8;
+                    int scope_min = -8;
 
-                //     if (cutlass::sizeof_bits<ElementA>::value == 4)
-                //     {
-                //         scope_max = 2;
-                //         scope_min = -2;
-                //     }
-                //     else if (cutlass::sizeof_bits<ElementA>::value == 1)
-                //     {
-                //         scope_max = 2;
-                //         scope_min = 0;
-                //     }
+                    if (cutlass::sizeof_bits<ElementA>::value == 4)
+                    {
+                        scope_max = 2;
+                        scope_min = -2;
+                    }
+                    else if (cutlass::sizeof_bits<ElementA>::value == 1)
+                    {
+                        scope_max = 1;
+                        scope_min = 0;
+                    }
 
-                //     uint64_t seed = 7;
-                //     // cutlass::reference::host::TensorFillRandomUniform(
-                //     //     tensor_A.host_view(), seed, scope_max, scope_min, 0);
-                //     // for (int i = 0; i < ThreadblockShape::kM; i++)
-                //     // {
-                //     //     for (int j = 0; j < ThreadblockShape::kN / Sparse; j++)
-                //     //     {
-                //     //         tensor_A.at({i, j}) = 1;
-                //     //     }
-                //     // }
-                // }
-                // else if (init_A == cutlass::Distribution::Sequential)
-                // {
-                //     cutlass::reference::host::BlockFillSequential(tensor_A.host_data(),
-                //                                                   tensor_A.capacity());
-                // }
-                // else if (init_A == cutlass::Distribution::Identity)
-                // {
-                //     cutlass::reference::host::TensorFillIdentity(tensor_A.host_view());
-                // }
-                // else
-                // {
-                //     return false;
-                // }
+                    uint64_t seed = 7;
+
+                    cutlass::reference::host::BlockFillRandomUniform(tensor_A.host_data(),
+                        tensor_A.capacity(), seed, scope_max, scope_min, 0);
+
+                }
+                else if (init_A == cutlass::Distribution::Sequential)
+                {
+                    cutlass::reference::host::BlockFillSequential(tensor_A.host_data(),
+                                                                  tensor_A.capacity());
+                }
+                else if (init_A == cutlass::Distribution::Identity)
+                {
+                    cutlass::reference::host::TensorFillIdentity(tensor_A.host_view());
+                }
+                else
+                {
+                    return false;
+                }
 
                 if (init_B == cutlass::Distribution::Uniform)
                 {
