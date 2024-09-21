@@ -13,7 +13,7 @@ TEST(SM80_sparse_gemm_threadblock_congruous,
   using ElementC = float;
   using LayoutC = cutlass::layout::RowMajor;
 
-  cutlass::gemm::GemmCoord problem_size(64, 64, 512);
+  cutlass::gemm::GemmCoord problem_size(128, 64, 512);
 
   using ThreadblockShape = cutlass::gemm::GemmShape<128, 64, 256>;
   using WarpShape = cutlass::gemm::GemmShape<128, 32, 128>;

@@ -38,6 +38,24 @@ if (ENABLE_UNIT_TESTS)
 endif ()
 
 
+# add_library(
+#     onebit_sparse
+#     ./csrc/kernel.cu
+# )
+add_executable(
+    onebit_sparse
+    ./csrc/kernel.cu
+)
+
+link_libraries(
+    onebit_sparse
+    cuda cudadevrt cudart_static cublas 
+)
+set_target_properties(onebit_sparse PROPERTIES
+    COMPILE_FLAGS "-g"
+    # LINK_FLAGS "2> error.txt"
+)
+
 # 定义可执行文件及其源文件
 # add_executable(wmma wmma.cu)
 # add_executable(swmma sparse_wmma.cu)
@@ -51,10 +69,6 @@ endif ()
 # target_link_libraries(unit ${CUDA_LIBRARIES} cuda cudadevrt cudart_static cublas gtest)
 
 # 将错误输出重定向到文件
-# set_target_properties(swmma PROPERTIES
-#     COMPILE_FLAGS "-g"
-#     LINK_FLAGS "2> error.txt"
-# )
 
 # set_target_properties(unit PROPERTIES
 #     LINK_FLAGS "2> error.txt"

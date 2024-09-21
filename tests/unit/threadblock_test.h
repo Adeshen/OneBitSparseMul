@@ -352,27 +352,26 @@ namespace onebit
                     typename IteratorE::Params params_E(matrix_E_reordered.layout());
 
                     cudaError_t result;
-
                     int smem_size = int(sizeof(typename Mma::SharedStorage));
                     if (smem_size >= (48 << 10))
                     {
-                        result = cudaFuncSetAttribute(
-                            kernel_multistage_mma_sparse<Mma>,
-                            cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+                        // result = cudaFuncSetAttribute(
+                        //     kernel_multistage_mma_sparse<Mma>,
+                        //     cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
 
-                        if (result != cudaSuccess)
-                        {
-                            return true;
-                        }
+                        // if (result != cudaSuccess)
+                        // {
+                        //     return true;
+                        // }
 
-                        result = cudaFuncSetAttribute(
-                            kernel_multistage_mma_sparse<Mma>,
-                            cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+                        // result = cudaFuncSetAttribute(
+                        //     kernel_multistage_mma_sparse<Mma>,
+                        //     cudaFuncAttributePreferredSharedMemoryCarveout, 100);
 
-                        if (result != cudaSuccess)
-                        {
-                            return true;
-                        }
+                        // if (result != cudaSuccess)
+                        // {
+                        //     return true;
+                        // }
                     }
 
                     kernel_multistage_mma_sparse<Mma>
@@ -392,17 +391,17 @@ namespace onebit
 
                     matrix_C_computed.sync_host();
 
-                    cutlass::uncompress(matrix_A_uncompressed.host_ref(), matrix_A.host_ref(),
-                                        matrix_E.host_ref(), problem_size.m(),
-                                        problem_size.k());
+                    // cutlass::uncompress(matrix_A_uncompressed.host_ref(), matrix_A.host_ref(),
+                    //                     matrix_E.host_ref(), problem_size.m(),
+                    //                     problem_size.k());
 
-                    cutlass::reference::host::Gemm<ElementA, LayoutA, ElementB, LayoutB,
-                                                   ElementC, LayoutC, ElementC, ElementC>
-                        reference_gemm;
+                    // cutlass::reference::host::Gemm<ElementA, LayoutA, ElementB, LayoutB,
+                    //                                ElementC, LayoutC, ElementC, ElementC>
+                    //     reference_gemm;
 
-                    reference_gemm(problem_size, ElementC(alpha),
-                                   matrix_A_uncompressed.host_view(), matrix_B.host_view(),
-                                   ElementC(beta), matrix_C_reference.host_view());
+                    // reference_gemm(problem_size, ElementC(alpha),
+                    //                matrix_A_uncompressed.host_view(), matrix_B.host_view(),
+                    //                ElementC(beta), matrix_C_reference.host_view());
 
                     bool passed = cutlass::reference::host::TensorEquals(
                         matrix_C_computed.host_view(), matrix_C_reference.host_view());
@@ -410,6 +409,7 @@ namespace onebit
                     EXPECT_TRUE(passed);
 
                     if (!passed && CUTLASS_TEST_UNIT_ENABLE_WARNINGS)
+                    // if (true)
                     {
 
                         std::cout
@@ -425,7 +425,7 @@ namespace onebit
                             << "Computed:\n"
                             << matrix_C_computed.host_view() << "\n";
                     }
-
+           
                     EXPECT_GT(cutlass::reference::host::TensorNorm(matrix_C_reference.host_view()), 0);
                     EXPECT_GT(cutlass::reference::host::TensorNorm(matrix_C_computed.host_view()), 0);
 

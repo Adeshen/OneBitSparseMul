@@ -237,7 +237,5 @@ namespace cutlass
     } // namespace gemm
 }
 
-namespace onebit
-{
 
-} // namespace onebit
+
