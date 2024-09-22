@@ -74,5 +74,16 @@ namespace onebit
 
 } // namespace onebit
 
+#define CUTLASS_CHECK(status)                                                                          \
+    {                                                                                                  \
+        cutlass::Status error = status;                                                                \
+        if (error != cutlass::Status::kSuccess)                                                        \
+        {                                                                                              \
+            std::cerr << "Got cutlass error: " << cutlassGetStatusString(error) << " at: " << __LINE__ \
+                      << std::endl;                                                                    \
+            exit(EXIT_FAILURE);                                                                        \
+        }                                                                                              \
+    }
+
 CUTLASS_DEVICE
-void onebit_sparse_matmul(void *a, void *b, void *c, void *d);
+void onebit_sparse_matmul(void *a, void *b, void *c, void *d, void *e, int m, int n, int k);

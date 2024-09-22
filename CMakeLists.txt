@@ -35,19 +35,27 @@ if (ENABLE_UNIT_TESTS)
 endif ()
 
 
-# add_library(
-#     onebit_sparse
-#     ./csrc/kernel.cu
-# )
-add_executable(
-    onebit_sparse
-    ./csrc/kernel.cu
+add_library(
+    onebit_sparse_lib
+    ./csrc/kernel_lib.cu
 )
 
 link_libraries(
-    onebit_sparse
+    onebit_sparse_lib
     cuda cudadevrt cudart_static cublas 
 )
+
+
+add_executable(
+    onebit_sparse_test
+    ./tests/kernel_test.cu
+    ./csrc/kernel_lib.cu
+)
+link_libraries(
+    onebit_sparse_test
+    cuda cudadevrt cudart_static cublas 
+)
+
 # set_target_properties(onebit_sparse PROPERTIES
 #     COMPILE_FLAGS "-g"
 #     # LINK_FLAGS "2> error.txt"
