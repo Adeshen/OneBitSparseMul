@@ -60,28 +60,40 @@ void onebit_sparse_matmul(void *a, void *b, void *c, void *d, void *e, int m, in
     cutlass::Status status = gemm_op.can_implement(arguments);
     CUTLASS_CHECK(status);
 
-    // workspace.get();
-    // status = gemm_op.initialize(arguments, workspace.get());
-    // CUTLASS_CHECK(status);
+    status = gemm_op.initialize(arguments, workspace.get());
+    CUTLASS_CHECK(status);
 
-    // // Launch initialized CUTLASS kernel
-    // status = gemm_op();
-    // CUTLASS_CHECK(status);
+    // Launch initialized CUTLASS kernel
+    status = gemm_op();
+    CUTLASS_CHECK(status);
 }
 
 template <typename Operator>
 CUTLASS_GLOBAL void Kernel(typename Operator::Params params)
 {
     // Dynamic shared memory base pointer
-    extern __shared__ int SharedStorageBase[];
-    // Declare pointer to dynamic shared memory.
-    typename Operator::SharedStorage *shared_storage =
-        reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
+    // __shared__ int SharedStorageBase[];
+    // // Declare pointer to dynamic shared memory.
+    // typename Operator::SharedStorage *shared_storage =
+    //     reinterpret_cast<typename Operator::SharedStorage *>(SharedStorageBase);
+
+    __shared__ typename Operator::SharedStorage shared_storage;
+    int thread_idx = threadIdx.x;
+    int warp_idx = cutlass::canonical_warp_idx_sync();
+    int lane_idx = threadIdx.x % 32;
 
     Operator op;
+    __shared__ typename Operator::Epilogue::SharedStorage eshared_storage;
+    typename Operator::Epilogue epilogue(eshared_storage, thread_idx, warp_idx, lane_idx);
+
+
     // *shared_storage;
-    op(params, *shared_storage);
+    op(params, shared_storage);
+    
 }
+
+
+
 
 int main()
 {
@@ -95,7 +107,8 @@ int main()
     // //                                 smem_size);
 
     // }
-    
     GemmKernel::Params Params;
+    // GemmKernel::Epilogue 
     Kernel<GemmKernel> <<<dim3(1,1), dim3(32,1)>>>(Params);
+    
 }

@@ -13,11 +13,5 @@ cutlass_flag=-I$(CUTLASS_PATH)/include \
 NVCC=/usr/local/cuda/bin/nvcc
 
 
-warp:
-	$(NVCC) ./test_unit.cpp warp_test.cu  $(cutlass_flag)  -lgtest -g
-
-threadblock:
-	$(NVCC) ./test_unit.cpp threadblock_test.cu  $(cutlass_flag)  -lgtest -g
-
-epilogue:
-	$(NVCC) ./test_unit.cpp epilogue_test.cu  $(cutlass_flag)  -lgtest -g
+array:
+	$(NVCC) alignedarray_test.cu  $(cutlass_flag)  -lgtest -g
