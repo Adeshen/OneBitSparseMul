@@ -103,7 +103,7 @@ struct Options {
   /// Prints the usage statement.
   std::ostream & print_usage(std::ostream &out) const {
 
-    out << "43_ell_block_sparse_gemm\n\n"
+    out << "1 Bit Sparse _gemm\n\n"
       << "  This example profiles the performance of a 1 Bit Sparse GEMM kernel.\n\n"
       << "Options:\n\n"
       << "  --help                      If specified, displays this usage statement.\n\n"
