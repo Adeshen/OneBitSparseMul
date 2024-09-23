@@ -10,4 +10,4 @@ cutlass_flag=-I$(CUTLASS_PATH)/include \
 NVCC=/usr/local/cuda/bin/nvcc
 
 kernel:
-	$(NVCC) csrc/kernel.cu $(cutlass_flag)
+	$(NVCC) csrc/kernel_lib.cu  tests/kernel_test.cu $(cutlass_flag)

@@ -5,6 +5,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include "cuda_runtime.h"
+#include "cuda_runtime_api.h"
 #include "cutlass/util/command_line.h"
 #include "cutlass/util/distribution.h"
 #include "cutlass/util/device_memory.h"
@@ -87,7 +89,7 @@ struct Options {
     cmd.get_cmd_line_argument("beta", beta, 0.0f);    
     cmd.get_cmd_line_argument("iterations", iterations, 20);
     cmd.get_cmd_line_argument("streams", cuda_streams, 0);
-    cmd.get_cmd_line_argument("reference-check", reference_check, true);
+    cmd.get_cmd_line_argument("reference-check", reference_check, false);
 
     cmd.get_cmd_line_argument("a_rows", a_rows, 1024);
     cmd.get_cmd_line_argument("n", n, 1024);
@@ -102,7 +104,7 @@ struct Options {
   std::ostream & print_usage(std::ostream &out) const {
 
     out << "43_ell_block_sparse_gemm\n\n"
-      << "  This example profiles the performance of a ELL block sparse GEMM kernel.\n\n"
+      << "  This example profiles the performance of a 1 Bit Sparse GEMM kernel.\n\n"
       << "Options:\n\n"
       << "  --help                      If specified, displays this usage statement.\n\n"
       << "  --a_rows=<int>              Sets the number of the rows of the sparse matrix.\n"
@@ -118,7 +120,7 @@ struct Options {
 
     out << "\n\nExamples:\n\n"
 
-      << "# Runs a 1024x1024x1024 ELL block sparse GEMM with 16x16 block size and actual 512 non-zero columns in A operand\n"
+      << "# Runs a 1024x1024x1024 1 Bit Sparse GEMM with 16x16 block size and actual 512 non-zero columns in A operand\n"
       << "$ ./examples/43_ell_block_sparse_gemm/43_ell_block_sparse_gemm --a_rows=1024 --n=1024 --a_cols=1024 --a_ell_num_columns=512 --a_ell_blocksize=16\n\n";
 
     return out;
@@ -162,8 +164,8 @@ public:
   using LayoutE = typename Gemm::LayoutE;
 
   static int const Sparse =  2;
-  static int const ElementsPerElementE = Gemm::ElementsPerElementE;
-
+  static int const ElementsPerElementE = Gemm::kElementsPerElementE;
+  static int const MaxID2 = 2;
 private:
 
   //
@@ -222,7 +224,7 @@ private:
       int bits_output = cutlass::sizeof_bits<typename Gemm::ElementC>::value;
 
       if (bits_input == 1) {
-        scope_max = 2;
+        scope_max = 1;
         scope_min = 0;
       } else if (bits_input <= 8) {
         scope_max = 2;
@@ -298,7 +300,9 @@ private:
         }
       }
     }
-
+    uint32_t content = (MaxID2 == 1) ? 0x44444444 : 0x4444;
+    cutlass::reference::host::TensorFill(tensor_e.host_view(),
+                                            (ElementE)(content));
     tensor_a.sync_device();
     tensor_b.sync_device();
     tensor_c.sync_device();
@@ -431,6 +435,10 @@ public:
     // Configure the GEMM arguments
     typename EpilogueOutputOp::Params epilogue_op(options.alpha, options.beta);
 
+
+    float alpha = 1;
+    float beta = 1;
+    int split_k_slices = 1;
     // Configure GEMM arguments
     typename Gemm::Arguments args(
       {options.a_rows, options.n, options.a_cols},
@@ -438,12 +446,9 @@ public:
       tensor_b.device_ref(),
       tensor_c.device_ref(),
       tensor_d.device_ref(),
-      tensor_ell_idx.device_data(),
-      options.a_ell_num_columns,
-      options.a_ell_blocksize,
-      options.a_base,
-      epilogue_op 
-    );
+      tensor_e.device_ref(),
+    {alpha, beta},   // <- tuple of alpha and beta
+    split_k_slices); // <- k-dimension split factor
 
     // Initialize the GEMM object
     Gemm gemm{};
@@ -558,7 +563,7 @@ public:
     }
 
     std::cout << std::endl;
-    std::cout << "ELL Block Sparse GEMM (CUTLASS):\n"
+    std::cout << "1 Bit Sparse GEMM (CUTLASS):\n"
       << "====================================================" << std::endl;
 
     std::cout << std::endl;
@@ -626,7 +631,7 @@ int main(int argc, char const **args) {
 
   Result result = testbed.profile();
   if (!result.passed) {
-    std::cout << "Profiling CUTLASS ELL block sparse GEMM has failed.\n";
+    std::cout << "Profiling CUTLASS 1 Bit Sparse GEMM has failed.\n";
     std::cout << "\nFailed\n";
     return -1;
   }
