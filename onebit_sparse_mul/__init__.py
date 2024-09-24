@@ -12,7 +12,7 @@ from onebit_sparse_mul._semi_structured_conversions import (
 def cuda_binary_mul(A, B, meta):
     C = torch.zeros((A.shape[0], B.shape[1]), dtype=torch.float32)
     onebit_sparse_cuda.onebit_mul(A, B, C, meta)
-
+    return C
 
 
 def binary_quant(tensor):
@@ -117,6 +117,10 @@ class BinaryLinear_2_4(nn.Module):
             raise NotImplementedError("the BinaryLinear")
         
         # return py_binary_gemm(x, self.packed_binary_sparse, self.meta)
+        sparse = self.packed_binary_sparse
+        dense = x.T
+        print(sparse.shape)
+        print(dense.shape)
         return cuda_binary_mul(self.packed_binary_sparse, x,  self.meta)
     
     def pack(self, weight):
@@ -131,6 +135,7 @@ class BinaryLinear_2_4(nn.Module):
         binary_sparse = binary_quant(sparse)
         del sparse
 
+        binary_sparse = binary_sparse.T
         self.packed_binary_sparse = pack_binary(binary_sparse)
         # print(self.packed_binary_sparse.shape)
         self.vaild = True
