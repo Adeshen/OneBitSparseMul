@@ -19,10 +19,9 @@ setup(
                 "/root/OneBitQuantizer/OneBitSparseMul/include",
             ],
             libraries_dir=[
-                "./"
+                "."
             ],
-            dlink=True,
-            dlink_libraries=[
+            libraries=[
                 "onebitmul"
             ],
             extra_compile_args={
