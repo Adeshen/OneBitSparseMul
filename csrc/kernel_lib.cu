@@ -5,6 +5,8 @@
 #include "cutlass/cutlass.h"
 #include "kernel.h"
 #include "cutlass/util/device_memory.h"
+#include "onebit_sparse_tensor.h"
+
 
 #define CUTLASS_CHECK(status)                                                                          \
     {                                                                                                  \
@@ -17,7 +19,7 @@
         }                                                                                              \
     }
 
-CUTLASS_DEVICE
+// CUTLASS_DEVICE
 void onebit_sparse_matmul(void *a, void *b, void *c, void *d, void *e, int m, int n, int k)
 {
 
