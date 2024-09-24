@@ -17,3 +17,6 @@ print(w[:2,:4], "w", w.shape)  # 0, 0, 1, 1
 print(mask[:2,:4], "mask", mask.shape) # 0, 0, 1, 1
 print(sparse[:2,:2], "sparse", sparse.shape) # 1, 1
 print(meta[:1], "meta", meta.shape, meta.dtype) #  -4370 = 1110, 1110, 1110, 1110
+
+
+onebit_sparse_mul.mul()
