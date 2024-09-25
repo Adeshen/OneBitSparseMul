@@ -6,8 +6,8 @@
 #include "kernel.h"
 #include "cutlass/util/device_memory.h"
 #include "onebit_sparse_tensor.h"
-
-
+#include "cutlass/numeric_conversion.h"
+#include <iostream>
 #define CUTLASS_CHECK(status)                                                                          \
     {                                                                                                  \
         cutlass::Status error = status;                                                                \
@@ -40,8 +40,25 @@ void onebit_sparse_matmul(void *a, void *b, void *c, void *d, void *e, int m, in
     cutlass::TensorRef ref_d(D, Gemm::LayoutC::packed({m, n}));
     cutlass::TensorRef const ref_e(E, Gemm::LayoutE::packed({m, k / kSparse / kElementsPerElementE}));
 
+    // for (int i = 0; i < 10; i++)
+    // {
+    //     // A+-;
+    //     // ref_a++;
+    //     printf("%d ", static_cast<unsigned int>(A[i]));
+    //     // printf("%d ", static_cast<unsigned int>(ref_a[{0, i}]));
+    // }
+    // printf("point \n");
+    // cutlass::NumericConverter<int, cutlass::uint1b_t> conver;
+    // for (int j = 0; j < 5; j++)
+    // {
+    //     for (int i = 0; i < 10; i++)
+    //     {
+    //         printf("%d ", conver(ref_a[{j, i}]));
+    //     }
+    //     printf("tensor a ref\n");
+    // }
     float alpha = 1;
-    float beta = 1;
+    float beta = 0;
     int split_k_slices = 1;
 
     cutlass::gemm::GemmCoord problem_size(m, n, k);
@@ -68,4 +85,13 @@ void onebit_sparse_matmul(void *a, void *b, void *c, void *d, void *e, int m, in
     // Launch initialized CUTLASS kernel
     status = gemm_op();
     CUTLASS_CHECK(status);
+
+    // for (int j = 0; j < 5; j++)
+    // {
+    //     for (int i = 0; i < 10; i++)
+    //     {
+    //         printf("%f ", ref_d[{0, i}]);
+    //     }
+    //     printf("tensor d ref\n");
+    // }
 }

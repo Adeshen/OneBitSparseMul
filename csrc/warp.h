@@ -34,7 +34,7 @@ namespace cutlass
                     //         out_arr[i] = T(-1);
                     //     }
                     // }
-                    EConverter converter;
+                    // EConverter converter;
                     Array<T, N> out_arr;
                     
                     CUTLASS_PRAGMA_UNROLL

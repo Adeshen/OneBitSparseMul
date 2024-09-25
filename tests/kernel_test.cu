@@ -21,7 +21,45 @@
 
 #include "kernel.h"
 /// Result structure
-struct Result {
+template <typename ElementA,
+          typename LayoutA,
+          typename ElementB,
+          typename LayoutB,
+          typename ElementE,
+          typename LayoutE>
+void onebit_sparse_uncompress(
+    cutlass::TensorRef<ElementA, LayoutA> uncompressed_tensor_a,
+    cutlass::TensorRef<ElementB, LayoutB> tensor_a,
+    cutlass::TensorRef<ElementE, LayoutE> tensor_e,
+    int row, int col)
+{
+  const int kPerElement = cutlass::sizeof_bits<ElementE>::value / 2;
+
+  cutlass::NumericConverter<ElementA, ElementB, cutlass::FloatRoundStyle::round_to_nearest> conv;
+  for (int i = 0; i < row; i++)
+  {
+    for (int c = 0; c < (col / kPerElement); ++c)
+    {
+      // 读取tensor_e的元素
+      ElementE E = tensor_e.at({i, c});
+      // 解压元数据并填充uncompressed_tensor_a
+      for (int j = 0; j < kPerElement; j++)
+      {
+        int e = (E >> (j * 2)) & 0b11;
+
+        // 获取对应的值，利用位运算提取出具体的值
+        // 这里假设 ElementA 是一个可以存储0或1的类型
+        uncompressed_tensor_a.at({i,
+                                  c * kPerElement + (j / 2) * 4 + e}) =
+            conv(tensor_a.at({i, c * kPerElement + j}));
+      }
+      // uncompressed_tensor_a.at({i, c * kPerElement * 2 }) = 1;
+    }
+  }
+}
+
+struct Result
+{
 
   double runtime_ms;
   double gflops;
@@ -34,18 +72,54 @@ struct Result {
   //
 
   Result(
-    double runtime_ms = 0,
-    double gflops = 0,
-    cutlass::Status status = cutlass::Status::kSuccess,
-    cudaError_t error = cudaSuccess
-  ):
-    runtime_ms(runtime_ms), gflops(gflops), status(status), error(error), passed(true) { }
+      double runtime_ms = 0,
+      double gflops = 0,
+      cutlass::Status status = cutlass::Status::kSuccess,
+      cudaError_t error = cudaSuccess) : runtime_ms(runtime_ms), gflops(gflops), status(status), error(error), passed(true) {}
 };
 
+template <typename Destination,
+          typename LayoutD,
+          typename Source,
+          typename LayoutS>
+void convert(
+    cutlass::TensorRef<Destination, LayoutD> destination,
+    cutlass::TensorRef<Source, LayoutS> const source,
+    int row, int col)
+{
+  cutlass::NumericConverter<Destination, int, 
+          cutlass::FloatRoundStyle::round_to_nearest> conv;
+  cutlass::NumericConverter<Destination, Source, 
+          cutlass::FloatRoundStyle::round_to_nearest> conv_;
+  for (int i = 0; i < row; i++)
+  {
+    for (int j = 0; j < col; j++)
+    {
+      if (source.at({i, j}).get() == Source(1))
+      {
+        destination.at({i, j}) = Destination(1);
+      }
+      else
+      {
+        destination.at({i, j}) = Destination(-1);
+      }
+      // destination.at({i, j}) = conv_(source.at({i, j}));
+      // if (source.at({i, j}).get() == Source(0))
+      // {
+      //   destination.at({i, j}) = conv(-1);
+      // }else{
+      //   destination.at({i, j}) = conv(1);
+      // }
+    }
+  }
+
+  return;
+}
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Command line options parsing
-struct Options {
+struct Options
+{
 
   bool help;
   bool reference_check;
@@ -60,33 +134,35 @@ struct Options {
 
   //
   // Methods
-  // 
+  //
 
-  Options():
-    help(false),
-    reference_check(true),
-    iterations(20),
-    cuda_streams(0),
-    a_rows(1024),
-    n(1024),
-    a_cols(1024),
-    a_ell_num_columns(512),
-    a_ell_blocksize(16),
-    a_base(0),
-    alpha(1),
-    beta()
-  { }
+  Options() : help(false),
+              reference_check(true),
+              iterations(20),
+              cuda_streams(0),
+              a_rows(1024),
+              n(1024),
+              a_cols(1024),
+              a_ell_num_columns(512),
+              a_ell_blocksize(16),
+              a_base(0),
+              alpha(1),
+              beta()
+  {
+  }
 
   // Parses the command line
-  void parse(int argc, char const **args) {
+  void parse(int argc, char const **args)
+  {
     cutlass::CommandLine cmd(argc, args);
 
-    if (cmd.check_cmd_line_flag("help")) {
+    if (cmd.check_cmd_line_flag("help"))
+    {
       help = true;
     }
 
     cmd.get_cmd_line_argument("alpha", alpha, 1.0f);
-    cmd.get_cmd_line_argument("beta", beta, 0.0f);    
+    cmd.get_cmd_line_argument("beta", beta, 0.0f);
     cmd.get_cmd_line_argument("iterations", iterations, 20);
     cmd.get_cmd_line_argument("streams", cuda_streams, 0);
     cmd.get_cmd_line_argument("reference-check", reference_check, false);
@@ -101,47 +177,48 @@ struct Options {
   }
 
   /// Prints the usage statement.
-  std::ostream & print_usage(std::ostream &out) const {
+  std::ostream &print_usage(std::ostream &out) const
+  {
 
     out << "1 Bit Sparse _gemm\n\n"
-      << "  This example profiles the performance of a 1 Bit Sparse GEMM kernel.\n\n"
-      << "Options:\n\n"
-      << "  --help                      If specified, displays this usage statement.\n\n"
-      << "  --a_rows=<int>              Sets the number of the rows of the sparse matrix.\n"
-      << "  --n=<int>                   Sets the N dimension.\n"
-      << "  --a_cols=<int>              Sets the number of columns of the sparse matrix.\n"
-      << "  --a_ell_num_columns=<int>   Sets the actual number of columns of the Blocked-Ellpack format.\n"
-      << "  --a_ell_blocksize=<int>     Sets the size of the ELL-Block.\n"
-      << "  --a_base=<int>              Sets the base index.\n"
-      << "  --alpha=<f32>               Epilogue scalar alpha (real part)\n"
-      << "  --beta=<f32>                Epilogue scalar beta (real part)\n\n"
-      << "  --iterations=<int>          Number of profiling iterations to perform.\n"
-      << "  --reference-check=<bool>    If true, performs reference check.\n";
+        << "  This example profiles the performance of a 1 Bit Sparse GEMM kernel.\n\n"
+        << "Options:\n\n"
+        << "  --help                      If specified, displays this usage statement.\n\n"
+        << "  --a_rows=<int>              Sets the number of the rows of the sparse matrix.\n"
+        << "  --n=<int>                   Sets the N dimension.\n"
+        << "  --a_cols=<int>              Sets the number of columns of the sparse matrix.\n"
+        << "  --a_ell_num_columns=<int>   Sets the actual number of columns of the Blocked-Ellpack format.\n"
+        << "  --a_ell_blocksize=<int>     Sets the size of the ELL-Block.\n"
+        << "  --a_base=<int>              Sets the base index.\n"
+        << "  --alpha=<f32>               Epilogue scalar alpha (real part)\n"
+        << "  --beta=<f32>                Epilogue scalar beta (real part)\n\n"
+        << "  --iterations=<int>          Number of profiling iterations to perform.\n"
+        << "  --reference-check=<bool>    If true, performs reference check.\n";
 
     out << "\n\nExamples:\n\n"
 
-      << "# Runs a 1024x1024x1024 1 Bit Sparse GEMM with 16x16 block size and actual 512 non-zero columns in A operand\n"
-      << "$ ./examples/43_ell_block_sparse_gemm/43_ell_block_sparse_gemm --a_rows=1024 --n=1024 --a_cols=1024 --a_ell_num_columns=512 --a_ell_blocksize=16\n\n";
+        << "# Runs a 1024x1024x1024 1 Bit Sparse GEMM with 16x16 block size and actual 512 non-zero columns in A operand\n"
+        << "$ ./examples/43_ell_block_sparse_gemm/43_ell_block_sparse_gemm --a_rows=1024 --n=1024 --a_cols=1024 --a_ell_num_columns=512 --a_ell_blocksize=16\n\n";
 
     return out;
   }
 
   /// Compute performance in GFLOP/s
-  double gflops(double runtime_s) const {
+  double gflops(double runtime_s) const
+  {
 
-    // Number of real-valued multiply-adds 
+    // Number of real-valued multiply-adds
     int64_t fmas = (int64_t)a_rows * (int64_t)a_cols * (int64_t)n;
-    
+
     // Two flops per multiply-add
     return 2.0 * double(fmas) / double(1.0e9) / runtime_s;
   }
 };
 
-
 template <typename Gemm>
-class Testbed {
+class Testbed
+{
 public:
-
   //
   // Type definitions
   //
@@ -163,11 +240,11 @@ public:
   using ElementE = typename Gemm::ElementE;
   using LayoutE = typename Gemm::LayoutE;
 
-  static int const Sparse =  2;
+  static int const Sparse = 2;
   static int const ElementsPerElementE = Gemm::kElementsPerElementE;
   static int const MaxID2 = 2;
-private:
 
+private:
   //
   // Data members
   //
@@ -185,98 +262,112 @@ private:
   cutlass::HostTensor<ElementB, LayoutB> tensor_b;
   cutlass::HostTensor<ElementC, LayoutC> tensor_c;
   cutlass::HostTensor<ElementC, LayoutC> tensor_d;
-  
+
   cutlass::HostTensor<ElementE, LayoutE> tensor_e;
-  cutlass::HostTensor<ElementA, LayoutA> tensor_a_uncompressed;
+  cutlass::HostTensor<ElementB, LayoutA> tensor_a_uncompressed;
+  cutlass::HostTensor<float, LayoutA> tensor_a_dequant;
   cutlass::HostTensor<ElementC, LayoutC> reference_d;
 
   cutlass::HostTensor<int32_t, LayoutA> tensor_ell_idx;
 
 public:
-
   //
   // Methods
   //
 
   Testbed(
-    Options const &options_,
-    cutlass::Distribution::Kind init_A_ = cutlass::Distribution::Uniform,
-    cutlass::Distribution::Kind init_B_ = cutlass::Distribution::Uniform,
-    cutlass::Distribution::Kind init_C_ = cutlass::Distribution::Uniform,
-    cutlass::Distribution::Kind init_ELL_ = cutlass::Distribution::Uniform,
-    uint32_t seed_ = 3080
-  ):
-    options(options_), init_A(init_A_), init_B(init_B_), init_C(init_C_), init_ELL(init_ELL_), seed(seed_) { }
+      Options const &options_,
+      cutlass::Distribution::Kind init_A_ = cutlass::Distribution::Uniform,
+      cutlass::Distribution::Kind init_B_ = cutlass::Distribution::Uniform,
+      cutlass::Distribution::Kind init_C_ = cutlass::Distribution::Uniform,
+      cutlass::Distribution::Kind init_ELL_ = cutlass::Distribution::Uniform,
+      uint32_t seed_ = 3080) : options(options_), init_A(init_A_), init_B(init_B_), init_C(init_C_), init_ELL(init_ELL_), seed(seed_) {}
 
 private:
-
   /// Helper to initialize a tensor view
   template <typename Element, typename Layout>
   void initialize_tensor_(
-    cutlass::TensorView<Element, Layout> view,
-    cutlass::Distribution::Kind dist_kind,
-    uint32_t seed) {
+      cutlass::TensorView<Element, Layout> view,
+      cutlass::Distribution::Kind dist_kind,
+      uint32_t seed)
+  {
 
-    if (dist_kind == cutlass::Distribution::Uniform) {
+    if (dist_kind == cutlass::Distribution::Uniform)
+    {
 
       Element scope_max, scope_min;
       int bits_input = cutlass::sizeof_bits<Element>::value;
       int bits_output = cutlass::sizeof_bits<typename Gemm::ElementC>::value;
 
-      if (bits_input == 1) {
+      if (bits_input == 1)
+      {
         scope_max = 1;
-        scope_min = 0;
-      } else if (bits_input <= 8) {
+        scope_min = 1;
+      }
+      else if (bits_input <= 8)
+      {
         scope_max = 2;
         scope_min = -2;
-      } else if (bits_output == 16) {
-        if (cutlass::sizeof_bits<ElementAccumulator>::value <= 16) {
+      }
+      else if (bits_output == 16)
+      {
+        if (cutlass::sizeof_bits<ElementAccumulator>::value <= 16)
+        {
           scope_max = 5;
           scope_min = -5;
         }
-        else {
+        else
+        {
           scope_max = 8;
           scope_min = -8;
         }
-      } else {
+      }
+      else
+      {
         scope_max = 8;
         scope_min = -8;
       }
 
       cutlass::reference::host::TensorFillRandomUniform(
-        view, seed, scope_max, scope_min, 0);
-    } 
-    else if (dist_kind == cutlass::Distribution::Gaussian) {
+          view, seed, scope_max, scope_min, 0);
+    }
+    else if (dist_kind == cutlass::Distribution::Gaussian)
+    {
 
       cutlass::reference::host::TensorFillRandomGaussian(
-        view, seed, Element(), Element(0.5f));
+          view, seed, Element(), Element(0.5f));
     }
-    else if (dist_kind == cutlass::Distribution::Sequential) {
+    else if (dist_kind == cutlass::Distribution::Sequential)
+    {
 
       // Fill with increasing elements
       cutlass::reference::host::BlockFillSequential(
-        view.data(), view.capacity(), Element(1), Element());
-    } else {
+          view.data(), view.capacity(), Element(1), Element());
+    }
+    else
+    {
 
       // Fill with all 1s
       cutlass::reference::host::BlockFillSequential(
-        view.data(), view.capacity(), Element(), Element(1));
+          view.data(), view.capacity(), Element(), Element(1));
     }
   }
 
   /// Initializes data structures
-  void initialize_() {
-    tensor_a.resize(cutlass::make_Coord(options.a_rows, options.a_ell_num_columns));
+  void initialize_()
+  {
+    tensor_a.resize(cutlass::make_Coord(options.a_rows, options.a_cols / Sparse));
     tensor_b.resize(cutlass::make_Coord(options.a_cols, options.n));
     tensor_c.resize(cutlass::make_Coord(options.a_rows, options.n));
     tensor_d.resize(cutlass::make_Coord(options.a_rows, options.n));
     tensor_e.resize(cutlass::make_Coord(options.a_rows, options.a_cols / Sparse / ElementsPerElementE));
 
     tensor_a_uncompressed.resize(cutlass::make_Coord(options.a_rows, options.a_cols));
+    tensor_a_dequant.resize(cutlass::make_Coord(options.a_rows, options.a_cols / Sparse));
     reference_d.resize(cutlass::make_Coord(options.a_rows, options.n));
 
     tensor_ell_idx.resize(cutlass::make_Coord(options.a_rows / options.a_ell_blocksize,
-                          options.a_ell_num_columns / options.a_ell_blocksize));
+                                              options.a_ell_num_columns / options.a_ell_blocksize));
 
     //
     // Initialize the problems of the workspace
@@ -286,23 +377,27 @@ private:
     initialize_tensor_(tensor_b.host_view(), init_B, seed * 2022);
     initialize_tensor_(tensor_c.host_view(), init_C, seed * 2023);
 
-    if (init_ELL == cutlass::Distribution::Uniform) {
+    if (init_ELL == cutlass::Distribution::Uniform)
+    {
       cutlass::reference::host::TensorFillRandomEllIdx(
           tensor_ell_idx.host_view(), seed,
           options.a_rows / options.a_ell_blocksize,
           options.a_ell_num_columns / options.a_ell_blocksize,
           options.a_cols / options.a_ell_blocksize);
-
-    } else {
-      for(int i = 0; i < options.a_rows / options.a_ell_blocksize; ++i) {
-        for(int j = 0; j < options.a_ell_num_columns / options.a_ell_blocksize; ++j) {
-          tensor_ell_idx.at({i, j}) = j+3;
+    }
+    else
+    {
+      for (int i = 0; i < options.a_rows / options.a_ell_blocksize; ++i)
+      {
+        for (int j = 0; j < options.a_ell_num_columns / options.a_ell_blocksize; ++j)
+        {
+          tensor_ell_idx.at({i, j}) = j + 3;
         }
       }
     }
     uint32_t content = (MaxID2 == 1) ? 0x44444444 : 0x4444;
     cutlass::reference::host::TensorFill(tensor_e.host_view(),
-                                            (ElementE)(content));
+                                         (ElementE)(content));
     tensor_a.sync_device();
     tensor_b.sync_device();
     tensor_c.sync_device();
@@ -312,45 +407,61 @@ private:
   }
 
   /// Verifies the result is a GEMM
-  bool verify_() {
+  bool verify_()
+  {
 
     bool passed = true;
 
     tensor_d.sync_host();
 
-    cutlass::uncompress_ell_block_sparse(
-          tensor_a_uncompressed.host_ref(),
-          tensor_a.host_ref(),
-          tensor_ell_idx.host_ref(),
-          options.a_rows,
-          options.a_cols,
-          options.a_ell_num_columns,
-          options.a_ell_blocksize
-    );
+    // cutlass::uncompress_ell_block_sparse(
+    //       tensor_a_uncompressed.host_ref(),
+    //       tensor_a.host_ref(),
+    //       tensor_ell_idx.host_ref(),
+    //       options.a_rows,
+    //       options.a_cols,
+    //       options.a_ell_num_columns,
+    //       options.a_ell_blocksize
+    // );
+
+    convert(
+        tensor_a_dequant.host_ref(),
+        tensor_a.host_ref(),
+        options.a_rows, options.a_cols / 2);
+
+    onebit_sparse_uncompress(
+        tensor_a_uncompressed.host_ref(),
+        tensor_a_dequant.host_ref(),
+        tensor_e.host_ref(),
+        options.a_rows,
+        options.a_cols);
+
+    const int kN = 128;
 
     cutlass::reference::host::Gemm<
-        typename Gemm::ElementA, typename Gemm::LayoutA,                                             
-        typename Gemm::ElementB, typename Gemm::LayoutB,                                             
-        typename Gemm::ElementC, typename Gemm::LayoutC,                                             
+        typename Gemm::ElementB, typename Gemm::LayoutA,
+        typename Gemm::ElementB, typename Gemm::LayoutB,
+        typename Gemm::ElementC, typename Gemm::LayoutC,
         ElementCompute,
-        ElementAccumulator, typename Gemm::Operator>                                                 
-        reference_gemm;                                                                              
-    
-    reference_gemm(                                                                                  
-      {options.a_rows, options.n, options.a_cols},
-      options.alpha, 
-      tensor_a_uncompressed.host_ref(), 
-      tensor_b.host_ref(),
-      options.beta,
-      reference_d.host_ref(),
-      ElementAccumulator(0)
-    );
+        ElementAccumulator, typename Gemm::Operator>
+        reference_gemm;
+
+    reference_gemm(
+        {options.a_rows, options.n, options.a_cols},
+        options.alpha,
+        tensor_a_uncompressed.host_ref(),
+        tensor_b.host_ref(),
+        options.beta,
+        reference_d.host_ref(),
+        ElementAccumulator(0));
 
     // Reference check
     passed = cutlass::reference::host::TensorEquals(tensor_d.host_view(), reference_d.host_view());
 
-    if (!passed) {
-      std::cerr << "\n***\nError - problem failed the QA check\n***\n" << std::endl;
+    if (!passed)
+    {
+      std::cerr << "\n***\nError - problem failed the QA check\n***\n"
+                << std::endl;
 
       std::stringstream fname;
 
@@ -367,28 +478,37 @@ private:
       std::ofstream results(fname.str());
 
       results
-        << "alpha: " << ElementCompute(options.alpha) << "\n"
-        << "beta: "  << ElementCompute(options.beta) << "\n"
-        << "block size: " << options.a_ell_blocksize << "\n"
-        << "\nA:\n" << tensor_a.host_view() << "\n"
-        << "\nA Ell Index:\n" << tensor_ell_idx.host_view() << "\n"
-        << "\nB:\n" << tensor_b.host_view() << "\n"
-        << "\nC:\n" << tensor_c.host_view() << "\n"
-        << "\nD reference:\n" << reference_d.host_view() << "\n"
-        << "\nD computed:\n" << tensor_d.host_view() << "\n";
-
+          << "alpha: " << ElementCompute(options.alpha) << "\n"
+          << "beta: " << ElementCompute(options.beta) << "\n"
+          // << "block size: " << options.a_ell_blocksize << "\n"
+          << "\nA:\n"
+          << tensor_a.host_view() << "\n"
+          << "\nA dequant:\n"
+          << tensor_a_dequant.host_view() << "\n"
+          << "\nA uncompressed:\n"
+          << tensor_a_uncompressed.host_view() << "\n"
+          << "\nA E Index:\n"
+          << tensor_e.host_view() << "\n"
+          << "\nB:\n"
+          << tensor_b.host_view() << "\n"
+          << "\nC:\n"
+          << tensor_c.host_view() << "\n"
+          << "\nD reference:\n"
+          << reference_d.host_view() << "\n"
+          << "\nD computed:\n"
+          << tensor_d.host_view() << "\n";
 
       return passed;
     }
-    
+
     return passed;
   }
 
 public:
-
   /// Returns the number of threadblocks to launch if the kernel can run on the target
   /// device. Otherwise, returns zero.
-  bool sufficient() const {
+  bool sufficient() const
+  {
     //
     // Determine SMEM requirements and waive if not satisfied
     //
@@ -399,17 +519,20 @@ public:
     int device_idx;
     cudaError_t result = cudaGetDevice(&device_idx);
 
-    if (result != cudaSuccess) {
+    if (result != cudaSuccess)
+    {
       throw std::runtime_error("cudaGetDevice() API call failed.");
     }
 
     result = cudaGetDeviceProperties(&properties, device_idx);
 
-    if (result != cudaSuccess) {
+    if (result != cudaSuccess)
+    {
       throw std::runtime_error("cudaGetDeviceProperties() failed");
     }
 
-    if (properties.sharedMemPerBlockOptin < smem_size) {
+    if (properties.sharedMemPerBlockOptin < smem_size)
+    {
       return false;
     }
 
@@ -417,12 +540,14 @@ public:
   }
 
   /// Executes a BlockedEll SpMM kernel and measures runtime.
-  Result profile() {
+  Result profile()
+  {
 
     Result result;
 
     // Early exit
-    if (!sufficient()) {
+    if (!sufficient())
+    {
       std::cout << "Active CUDA device lacks hardware resources to run CUTLASS BlockedEll SpMM kernel." << std::endl;
       return result;
     }
@@ -435,27 +560,27 @@ public:
     // Configure the GEMM arguments
     typename EpilogueOutputOp::Params epilogue_op(options.alpha, options.beta);
 
-
     float alpha = 1;
     float beta = 1;
     int split_k_slices = 1;
     // Configure GEMM arguments
     typename Gemm::Arguments args(
-      {options.a_rows, options.n, options.a_cols},
-      tensor_a.device_ref(),
-      tensor_b.device_ref(),
-      tensor_c.device_ref(),
-      tensor_d.device_ref(),
-      tensor_e.device_ref(),
-    {alpha, beta},   // <- tuple of alpha and beta
-    split_k_slices); // <- k-dimension split factor
+        {options.a_rows, options.n, options.a_cols},
+        tensor_a.device_ref(),
+        tensor_b.device_ref(),
+        tensor_c.device_ref(),
+        tensor_d.device_ref(),
+        tensor_e.device_ref(),
+        {alpha, beta},   // <- tuple of alpha and beta
+        split_k_slices); // <- k-dimension split factor
 
     // Initialize the GEMM object
     Gemm gemm{};
 
     result.status = gemm.initialize(args);
 
-    if (result.status != cutlass::Status::kSuccess) {
+    if (result.status != cutlass::Status::kSuccess)
+    {
       std::cerr << "Failed to initialize CUTLASS BlockedEll SpMM kernel." << std::endl;
       return result;
     }
@@ -463,7 +588,8 @@ public:
     // Run the BlockedEll SpMM object
     result.status = gemm.run();
 
-    if (result.status != cutlass::Status::kSuccess) {
+    if (result.status != cutlass::Status::kSuccess)
+    {
       std::cerr << "Failed to run CUTLASS BlockedEll SpMM kernel." << std::endl;
       return result;
     }
@@ -471,7 +597,8 @@ public:
     // Wait for completion
     result.error = cudaDeviceSynchronize();
 
-    if (result.error != cudaSuccess)  {
+    if (result.error != cudaSuccess)
+    {
       std::cerr << "Kernel execution error: " << cudaGetErrorString(result.error);
       return result;
     }
@@ -481,7 +608,8 @@ public:
     //
     result.passed = true;
 
-    if (options.reference_check) {
+    if (options.reference_check)
+    {
       result.passed = verify_();
     }
 
@@ -490,7 +618,8 @@ public:
     //
     result.status = gemm.run();
 
-    if (result.status != cutlass::Status::kSuccess) {
+    if (result.status != cutlass::Status::kSuccess)
+    {
       std::cerr << "Failed to run CUTLASS BlockedEll SpMM kernel." << std::endl;
       return result;
     }
@@ -501,9 +630,11 @@ public:
 
     cudaEvent_t events[2];
 
-    for (auto & event : events) {
+    for (auto &event : events)
+    {
       result.error = cudaEventCreate(&event);
-      if (result.error != cudaSuccess) {
+      if (result.error != cudaSuccess)
+      {
         std::cerr << "cudaEventCreate() failed: " << cudaGetErrorString(result.error) << std::endl;
         return -1;
       }
@@ -511,7 +642,8 @@ public:
 
     // Record an event at the start of a series of GEMM operations
     result.error = cudaEventRecord(events[0]);
-    if (result.error != cudaSuccess) {
+    if (result.error != cudaSuccess)
+    {
       std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
       return result;
     }
@@ -520,7 +652,8 @@ public:
     // Run profiling loop
     //
 
-    for (int iter = 0; iter < options.iterations; ++iter) {
+    for (int iter = 0; iter < options.iterations; ++iter)
+    {
       gemm();
     }
 
@@ -530,14 +663,16 @@ public:
 
     // Record an event when the GEMM operations have been launched.
     result.error = cudaEventRecord(events[1]);
-    if (result.error != cudaSuccess) {
+    if (result.error != cudaSuccess)
+    {
       std::cerr << "cudaEventRecord() failed: " << cudaGetErrorString(result.error) << std::endl;
       return result;
     }
 
     // Wait for work on the device to complete.
     result.error = cudaEventSynchronize(events[1]);
-    if (result.error != cudaSuccess) {
+    if (result.error != cudaSuccess)
+    {
       std::cerr << "cudaEventSynchronize() failed: " << cudaGetErrorString(result.error) << std::endl;
       return result;
     }
@@ -545,7 +680,8 @@ public:
     // Measure elapsed runtime
     float runtime_ms = 0;
     result.error = cudaEventElapsedTime(&runtime_ms, events[0], events[1]);
-    if (result.error != cudaSuccess) {
+    if (result.error != cudaSuccess)
+    {
       std::cerr << "cudaEventElapsed() failed: " << cudaGetErrorString(result.error) << std::endl;
       return result;
     }
@@ -558,13 +694,14 @@ public:
     // Cleanup
     //
 
-    for (auto event : events) {
+    for (auto event : events)
+    {
       (void)cudaEventDestroy(event);
     }
 
     std::cout << std::endl;
     std::cout << "1 Bit Sparse GEMM (CUTLASS):\n"
-      << "====================================================" << std::endl;
+              << "====================================================" << std::endl;
 
     std::cout << std::endl;
     std::cout << "    " << "Runtime: " << result.runtime_ms << " ms" << std::endl;
@@ -576,7 +713,8 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-int main(int argc, char const **args) {
+int main(int argc, char const **args)
+{
 
   //
   // This example uses mma.sync to directly access Tensor Cores to achieve peak performance.
@@ -585,20 +723,22 @@ int main(int argc, char const **args) {
   cudaDeviceProp props;
 
   cudaError_t error = cudaGetDeviceProperties(&props, 0);
-  if (error != cudaSuccess) {
+  if (error != cudaSuccess)
+  {
     std::cerr << "cudaGetDeviceProperties() returned an error: " << cudaGetErrorString(error) << std::endl;
     return -1;
   }
 
-  if (__CUDACC_VER_MAJOR__ < 11 || props.major < 8) {
-  
+  if (__CUDACC_VER_MAJOR__ < 11 || props.major < 8)
+  {
+
     //
     // This example requires an NVIDIA Ampere-architecture GPU.
     //
 
-    std::cout 
-      << "CUTLASS's BlockedEll SpMM example requires a GPU of NVIDIA's Ampere Architecture or "
-      << "later (compute capability 80 or greater).\n";
+    std::cout
+        << "CUTLASS's BlockedEll SpMM example requires a GPU of NVIDIA's Ampere Architecture or "
+        << "later (compute capability 80 or greater).\n";
 
     return 0;
   }
@@ -608,15 +748,14 @@ int main(int argc, char const **args) {
   //
 
   Options options;
-  
+
   options.parse(argc, args);
 
-  if (options.help) {
+  if (options.help)
+  {
     options.print_usage(std::cout) << std::endl;
     return 0;
   }
-
-
 
   //
   // Profile it
@@ -624,13 +763,15 @@ int main(int argc, char const **args) {
   using Gemm = onebit::device::DeviceSparseGemm;
   Testbed<Gemm> testbed(options);
 
-  if (!testbed.sufficient()) {
+  if (!testbed.sufficient())
+  {
     std::cout << "The active CUDA device lacks sufficient hardware resources to execute this kernel.\n";
     return 0;
   }
 
   Result result = testbed.profile();
-  if (!result.passed) {
+  if (!result.passed)
+  {
     std::cout << "Profiling CUTLASS 1 Bit Sparse GEMM has failed.\n";
     std::cout << "\nFailed\n";
     return -1;
