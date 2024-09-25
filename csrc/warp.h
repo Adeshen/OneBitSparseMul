@@ -19,19 +19,35 @@ namespace cutlass
             struct OneBitConvertAndPack
             {
                 using Converter = NumericArrayConverter<T, cutlass::uint1b_t, N, Round>;
+                using EConverter = NumericConverter<T, cutlass::uint1b_t, Round>;
 
                 CUTLASS_HOST_DEVICE
                 Array<T, N> operator()(Array<cutlass::uint1b_t, N> const &source)
                 {
-                    Converter converter;
-                    Array<T, N> out_arr = converter(source);
+                    // Converter converter;
+                    // Array<T, N> out_arr = converter(source);
+                    // CUTLASS_PRAGMA_UNROLL
+                    // for (int i = 0; i < N; ++i)
+                    // {
+                    //     if (out_arr[i] == T(0))
+                    //     {
+                    //         out_arr[i] = T(-1);
+                    //     }
+                    // }
+                    EConverter converter;
+                    Array<T, N> out_arr;
+                    
                     CUTLASS_PRAGMA_UNROLL
                     for (int i = 0; i < N; ++i)
-                    {
-                        if (out_arr[i] == T(0))
+                    {   
+                        
+                        if (source[i].get())
                         {
+                            out_arr[i] = T(1);
+                        }else{
                             out_arr[i] = T(-1);
                         }
+                        
                     }
                     return out_arr;
                 }
@@ -550,7 +566,6 @@ namespace cutlass
 
                                 int m_serpentine = ((n % 2) ? (MmaIterations::kRow - 1 - m) : m);
                                 int id2 = m_serpentine % kMaxID2;
-
                                 if (AccumulatorsInRowMajor)
                                 { // matrix B is reordered
                                     mma(
@@ -652,6 +667,12 @@ namespace cutlass
                         OneBitConvertAndPack<typename ArchMmaOperator::ElementA,
                                              FragmentA::kElements / 2, kRoundA>
                             convert_A;
+                        // detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
+                        //                      FragmentA::kElements / 2, kRoundA>
+                        //     convert_A;
+                            // detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
+                            //                  FragmentA::kElements / 2, kRoundA>::Converter b;
+                            //                  b++;
                         NumericArrayConverter<typename ArchMmaOperator::ElementB, ElementB,
                                               FragmentB::kElements, kRoundB>
                             convert_B;
