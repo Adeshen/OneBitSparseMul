@@ -15,6 +15,28 @@ namespace cutlass
         namespace warp
         {
 
+            template <typename T, int N, FloatRoundStyle Round>
+            struct OneBitConvertAndPack
+            {
+                using Converter = NumericArrayConverter<T, cutlass::uint1b_t, N, Round>;
+
+                CUTLASS_HOST_DEVICE
+                Array<T, N> operator()(Array<cutlass::uint1b_t, N> const &source)
+                {
+                    Converter converter;
+                    Array<T, N> out_arr = converter(source);
+                    CUTLASS_PRAGMA_UNROLL
+                    for (int i = 0; i < N; ++i)
+                    {
+                        if (out_arr[i] == T(0))
+                        {
+                            out_arr[i] = T(-1);
+                        }
+                    }
+                    return out_arr;
+                }
+            };
+
             /// Tile access iterator
             /// Each iteration acess in the tile is
             /// used as multiplicand for one
@@ -172,7 +194,7 @@ namespace cutlass
                 OneBitMmaTensorOpMultiplicandTileAccessIterator(
                     TensorRef const &ref,
                     int lane_id) : OneBitMmaTensorOpMultiplicandTileAccessIterator(ref,
-                                                                             {Shape::kRow, Shape::kColumn}, lane_id)
+                                                                                   {Shape::kRow, Shape::kColumn}, lane_id)
                 {
                 }
 
@@ -627,8 +649,8 @@ namespace cutlass
                     }
                     else
                     {
-                        detail::ConvertAndPack<typename ArchMmaOperator::ElementA, ElementA,
-                                               FragmentA::kElements / 2, kRoundA>
+                        OneBitConvertAndPack<typename ArchMmaOperator::ElementA,
+                                             FragmentA::kElements / 2, kRoundA>
                             convert_A;
                         NumericArrayConverter<typename ArchMmaOperator::ElementB, ElementB,
                                               FragmentB::kElements, kRoundB>

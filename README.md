@@ -43,5 +43,5 @@ pip install -e .
 
 Fourthly, run the base mul
 ```
-LD_LIBRARY_PATH=.  python3 /root/OneBitQuantizer/OneBitSparseMul/tests/python/test_sparse.py
+python3 /root/OneBitQuantizer/OneBitSparseMul/tests/python/test_mul.py
 ```
