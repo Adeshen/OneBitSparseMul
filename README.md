@@ -48,8 +48,14 @@ python3 /root/OneBitQuantizer/OneBitSparseMul/tests/python/test_mul.py
 
 # Benchmark test
 
+## gemm 256x64x128_128x32x128_16x8x32
 
-
+```
+        using ThreadblockShape = cutlass::gemm::GemmShape<256, 64, 128>;
+        using WarpShape = cutlass::gemm::GemmShape<128, 32, 128>;
+        using InstructionShape = cutlass::gemm::GemmShape<16, 8, 32>;
+```
+### test result on GPU3060ti  
 | a_rows |   n   | a_cols |    GFLOPs    | Runtime (ms) |
 |--------|-------|--------|--------------|---------------|
 |  512   |  512  |  512   |  14838.3     |   0.0180907   |
