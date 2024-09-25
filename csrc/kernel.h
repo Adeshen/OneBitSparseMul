@@ -20,7 +20,7 @@ namespace onebit
         constexpr int32_t kAlignmentA = 128 / cutlass::sizeof_bits<ElementA>::value;
         constexpr int32_t kAlignmentB = 128 / cutlass::sizeof_bits<ElementB>::value;
 
-        using ThreadblockShape = cutlass::gemm::GemmShape<256, 64, 128>;
+        using ThreadblockShape = cutlass::gemm::GemmShape<128, 64, 128>;
         using WarpShape = cutlass::gemm::GemmShape<128, 32, 128>;
         using InstructionShape = cutlass::gemm::GemmShape<16, 8, 32>;
 
