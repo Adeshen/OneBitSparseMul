@@ -13,8 +13,11 @@ NVCC=/usr/local/cuda/bin/nvcc
 kernel:
 	$(NVCC) csrc/kernel_lib.cu  tests/kernel_test.cu $(cutlass_flag)
 
-lib:
+share_lib:
 	$(NVCC) csrc/kernel_lib.cu $(cutlass_flag) -shared --compiler-options -fPIC -o libonebitmul.so
+
+lib:
+	$(NVCC) csrc/kernel_lib.cu $(cutlass_flag)  -lib --compiler-options -fPIC -o libonebitmul.a
 
 lib_test:
 	$(NVCC) tests/libso_test.cu $(cutlass_flag) -L$(ROOT) -lonebitmul

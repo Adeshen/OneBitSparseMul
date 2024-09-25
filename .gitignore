@@ -4,3 +4,8 @@
 
 *.egg-info
 __pycache__
+
+*.a
+*.so
+*.out
+
