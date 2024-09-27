@@ -10,7 +10,7 @@ from onebit_sparse_mul._semi_structured_conversions import (
 )
 
 def cuda_binary_mul(A, B, meta):
-    C = torch.empty((A.shape[0], B.shape[1]), dtype=torch.float32)
+    C = torch.zeros((A.shape[0], B.shape[1]), dtype=torch.float32)
     onebit_sparse_cuda.onebit_mul(A, B, C, meta)
     return C
 

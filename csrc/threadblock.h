@@ -107,7 +107,7 @@ namespace cutlass
 
                 // Warp thread arrangement
                 static int const kWarpThreadArrangementContiguousA =
-                    platform::min(Shape::kM / (kAccessSizeInBits / sizeof_bits<ElementA>::value), 8);
+                    platform::min(Shape::kM / (32 / sizeof_bits<ElementA>::value), 8);
 
                 static int const kWarpThreadArrangementStridedA =
                     kWarpSize / kWarpThreadArrangementContiguousA;
@@ -121,11 +121,12 @@ namespace cutlass
                 //
                 // Shared memory layouts
                 //
-                static int const Crosswise_A = platform::min(int(128 / sizeof(ElementA)),
-                                                             Shape::kM);
+                // static int const Crosswise_A = platform::min(int(64 / sizeof(ElementA)),
+                //                                              Shape::kM);
 
-                using SmemLayoutA = layout::ColumnMajorTensorOpMultiplicandCongruous<
-                    sizeof_bits<ElementA>::value, Crosswise_A>;
+                // using SmemLayoutA = layout::ColumnMajorTensorOpMultiplicandCongruous<
+                //     sizeof_bits<ElementA>::value, Crosswise_A>;
+                using SmemLayoutA = layout::ColumnMajorTensorOpMultiplicandCongruous64b;
 
                 // Shared memory layout
                 static int const Crosswise_B = platform::min(int(128 / sizeof(ElementB)),
@@ -139,11 +140,12 @@ namespace cutlass
                 //
 
                 /// ThreadMap of iterator A
+                static_assert(kWarpThreadArrangementContiguousA != 0, "kWarpThreadArrangementContiguousA is zeros");
                 using IteratorThreadMapA = transform::PitchLinearWarpRakedThreadMap<
                     layout::PitchLinearShape<Shape::kM, Shape::kK / kSparse>, kThreads,
                     layout::PitchLinearShape<kWarpThreadArrangementContiguousA,
                                              kWarpThreadArrangementStridedA>,
-                    128 / sizeof_bits<ElementA>::value>;
+                    32 / sizeof_bits<ElementA>::value>;
 
                 /// Shared memory iterator to A operand
                 using SmemIteratorA = transform::threadblock::RegularTileAccessIterator<

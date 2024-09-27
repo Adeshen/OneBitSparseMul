@@ -40,7 +40,7 @@ namespace cutlass
                     CUTLASS_PRAGMA_UNROLL
                     for (int i = 0; i < N; ++i)
                     {   
-                        
+                        // out_arr[i] = T(1);
                         if (source[i].get())
                         {
                             out_arr[i] = T(1);
@@ -473,6 +473,12 @@ namespace cutlass
                     MatrixShape<Policy::Operator::Shape::kM,
                                 Policy::Operator::Shape::kK / kSparse>,
                     Policy::OpDelta::kRow, kThreadCount, kPartitionsK>;
+                // using IteratorA = MmaTensorOpMultiplicandTileIterator<
+                //     MatrixShape<Shape::kM, Shape::kK / kSparse>, Operand::kA, ElementA,
+                //     LayoutA,
+                //     MatrixShape<Policy::Operator::Shape::kM,
+                //                 Policy::Operator::Shape::kK / kSparse>,
+                //     Policy::OpDelta::kRow, kThreadCount, kPartitionsK>;
 
                 /// Storage for A tile
                 using FragmentA = typename IteratorA::Fragment;

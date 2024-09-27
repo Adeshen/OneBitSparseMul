@@ -87,10 +87,10 @@ void convert(
     cutlass::TensorRef<Source, LayoutS> const source,
     int row, int col)
 {
-  cutlass::NumericConverter<Destination, int, 
-          cutlass::FloatRoundStyle::round_to_nearest> conv;
-  cutlass::NumericConverter<Destination, Source, 
-          cutlass::FloatRoundStyle::round_to_nearest> conv_;
+  // cutlass::NumericConverter<Destination, int, 
+  //         cutlass::FloatRoundStyle::round_to_nearest> conv;
+  // cutlass::NumericConverter<Destination, Source, 
+  //         cutlass::FloatRoundStyle::round_to_nearest> conv_;
   for (int i = 0; i < row; i++)
   {
     for (int j = 0; j < col; j++)
@@ -324,8 +324,10 @@ private:
       }
       else
       {
-        scope_max = 8;
-        scope_min = -8;
+        // scope_max = 8;
+        // scope_min = -8;
+        scope_max = 1;
+        scope_min = 1;
       }
 
       cutlass::reference::host::TensorFillRandomUniform(
