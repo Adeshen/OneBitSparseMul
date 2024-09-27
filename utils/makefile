@@ -1,4 +1,4 @@
 
-
+NVCC=/usr/local/cuda/bin/nvcc
 check:
-	nvcc ./checkout_device.cu -o a.out
+	$(NVCC) ./checkout_device.cu -o a.out
