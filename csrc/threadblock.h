@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "cutlass/array.h"
 #include "cutlass/cutlass.h"
 
@@ -23,7 +21,9 @@
 #include "cutlass/transform/threadblock/regular_tile_access_iterator_pitch_linear.h"
 #include "cutlass/gemm/threadblock/mma_sparse_multistage.h"
 #include "cutlass/gemm/threadblock/default_mma_core_sparse_sm80.h"
+#include "cutlass/gemm/threadblock/default_sparse_mma.h"
 #include "warp.h"
+#include "onebit_sparse_multistage.h"
 
 namespace cutlass
 {
@@ -59,12 +59,12 @@ namespace cutlass
                 cutlass::arch::CacheOperation::Kind CacheOpA,
                 /// Cache operation of operand B
                 cutlass::arch::CacheOperation::Kind CacheOpB>
-            struct DefaultSparseMmaCore<Shape_, 
-                                        WarpShape_, 
-                                        cutlass::gemm::GemmShape<16, 8, 32>, 
-                                        cutlass::uint1b_t,layout::ColumnMajor, 
+            struct DefaultSparseMmaCore<Shape_,
+                                        WarpShape_,
+                                        cutlass::gemm::GemmShape<16, 8, 32>,
+                                        cutlass::uint1b_t, layout::ColumnMajor,
                                         ElementB_, layout::RowMajor,
-                                        float, LayoutC_, 
+                                        float, LayoutC_,
                                         arch::OpClassTensorOp, Stages,
                                         cutlass::arch::OpMultiplyAdd, false, CacheOpA, CacheOpB>
             {
@@ -234,10 +234,96 @@ namespace cutlass
                                     MatrixShape<0, 0>, WarpCount::kK>;
             };
 
-        } // namespace threadblock
+            template <
+                /// Element type for A matrix operand
+                /// Layout type for A matrix operand
+                typename LayoutA,
+                /// Access granularity of A matrix in units of elements
+                int kAlignmentA,
+                /// Element type for B matrix operand
+                typename ElementB,
+                /// Layout type for B matrix operand
+                typename LayoutB,
+                /// Access granularity of B matrix in units of elements
+                int kAlignmentB,
+                /// Element type for internal accumulation
+                typename ElementAccumulator,
+                /// Tag indicating architecture to tune for
+                typename ArchTag,
+                /// Threadblock-level tile size (concept: GemmShape)
+                typename ThreadblockShape,
+                /// Warp-level tile size (concept: GemmShape)
+                typename WarpShape,
+                /// Instruction-level tile size (concept: GemmShape)
+                typename InstructionShape,
+                /// Number of stages used in the multistage mainloop
+                int Stages,
+                /// Operation perfomed by GEMM
+                typename Operator>
+            struct DefaultSparseMma<cutlass::uint1b_t, LayoutA, kAlignmentA, ElementB, LayoutB,
+                                    kAlignmentB, ElementAccumulator, layout::RowMajor,
+                                    arch::OpClassTensorOp, ArchTag, ThreadblockShape, WarpShape,
+                                    InstructionShape, Stages, Operator, false>
+            {
+                // static_assert(false, "ee");
+                using ElementA = cutlass::uint1b_t;
+                static cutlass::arch::CacheOperation::Kind const CacheOpA =
+                    ((sizeof_bits<ElementA>::value * kAlignmentA) == 128)
+                        ? cutlass::arch::CacheOperation::Global
+                        : cutlass::arch::CacheOperation::Always;
 
-    } // namespace gemm
+                static cutlass::arch::CacheOperation::Kind const CacheOpB =
+                    ((sizeof_bits<ElementB>::value * kAlignmentB) == 128)
+                        ? cutlass::arch::CacheOperation::Global
+                        : cutlass::arch::CacheOperation::Always;
+
+                // Define the MmaCore components
+                using MmaCore = typename cutlass::gemm::threadblock::DefaultSparseMmaCore<
+                    ThreadblockShape, WarpShape, InstructionShape, ElementA, LayoutA,
+                    ElementB, LayoutB, ElementAccumulator, layout::RowMajor, arch::OpClassTensorOp,
+                    Stages, Operator, false, CacheOpA, CacheOpB>;
+
+                static int const kSparse = MmaCore::kSparse;
+
+                // Define iterators over tiles from the A operand
+                using ThreadMapA = typename MmaCore::IteratorThreadMapA;
+                using AccessTypeA = cutlass::Array<ElementA, kAlignmentA>;
+                using IteratorA =
+                    cutlass::transform::threadblock::PredicatedTileAccessIterator<
+                        cutlass::MatrixShape<ThreadblockShape::kM, ThreadblockShape::kK / kSparse>,
+                        ElementA, LayoutA, 1, ThreadMapA, AccessTypeA>;
+
+                // Define iterators over tiles from the B operand
+                using ThreadMapB = typename MmaCore::IteratorThreadMapB;
+                using AccessTypeB = cutlass::Array<ElementB, kAlignmentB>;
+                using IteratorB =
+                    cutlass::transform::threadblock::PredicatedTileAccessIterator<
+                        cutlass::MatrixShape<ThreadblockShape::kK, ThreadblockShape::kN>,
+                        ElementB, LayoutB, 0, ThreadMapB, AccessTypeB>;
+
+                // Define iterators over tiles from the E operand
+                using ElementE = typename MmaCore::ElementE;
+                using LayoutE = typename MmaCore::GmemLayoutE;
+                using ThreadMapE = typename MmaCore::IteratorThreadMapE;
+                using AccessTypeE =
+                    cutlass::Array<ElementE, 128 / sizeof_bits<ElementE>::value>;
+                using IteratorE =
+                    cutlass::transform::threadblock::PredicatedTileAccessIterator<
+                        cutlass::MatrixShape<ThreadblockShape::kM,
+                                             ThreadblockShape::kK / kSparse /
+                                                 MmaCore::kElementsPerElementE>,
+                        ElementE, LayoutE, 1, ThreadMapE, AccessTypeE>;
+
+                // Define the threadblock-scoped multistage matrix multiply
+                using ThreadblockMma = cutlass::gemm::threadblock::OnebitSparseMmaMultistage<
+                    typename MmaCore::Shape, IteratorA, typename MmaCore::SmemIteratorA,
+                    MmaCore::kCacheOpA, IteratorB, typename MmaCore::SmemIteratorB,
+                    MmaCore::kCacheOpB, ElementAccumulator, layout::RowMajor,
+                    IteratorE, typename MmaCore::SmemIteratorE, MmaCore::kCacheOpE,
+                    typename MmaCore::MmaPolicy, Stages>;
+
+            }; // namespace threadblock
+
+        }; // namespace gemm
+    }
 }
-
-
-

@@ -11,10 +11,13 @@ cutlass_flag=-I$(CUTLASS_PATH)/include \
 NVCC=/usr/local/cuda/bin/nvcc
 
 kernel:
-	$(NVCC) csrc/kernel_lib.cu  tests/kernel_test.cu $(cutlass_flag)
+	$(NVCC) csrc/kernel_lib.cu  tests/kernel_test.cu $(cutlass_flag) 2>error.txt
+# 2> error.txt
+kernel_debug:
+	$(NVCC) -o debug.out csrc/kernel_lib.cu  tests/kernel_test.cu $(cutlass_flag) -G -g 2> error.txt
 
 share_lib:
-	$(NVCC) csrc/kernel_lib.cu $(cutlass_flag) -shared --compiler-options -fPIC -o libonebitmul.so
+	$(NVCC) csrc/kernel_lib.cu $(cutlass_flag) -shared --compiler-options -fPIC -o libonebitmul.so 
 
 lib:
 	$(NVCC) csrc/kernel_lib.cu $(cutlass_flag)  -lib --compiler-options -fPIC -o libonebitmul.a
