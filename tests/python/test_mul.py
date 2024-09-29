@@ -34,7 +34,7 @@ a = torch.ones(shape, dtype=torch.float16)
 import time
 c = torch.empty((packed_sparse.shape[0], a.shape[1]), dtype=torch.float32)
 
-iters = 1
+iters = 10
 
 st = time.time()
 for i in range(iters):
@@ -42,8 +42,11 @@ for i in range(iters):
     # c = onebit_sparse_mul.cuda_binary_mul(packed_sparse, a, meta)
 print("cost time", (time.time()-st)/iters)
 
+st = time.time()
+for i in range(iters):
+    ref_c = torch.matmul(raw_w.to(torch.float16), a)
+print("ref cost time", (time.time()-st)/iters)
 
-ref_c = torch.matmul(raw_w.to(torch.float16), a)
 print(c, "c ", c.shape)
 print(c == ref_c)
 print(ref_c)

@@ -26,7 +26,7 @@ def pack_binary(tensor):
     shape = list(tensor.shape)
     shape[-1] = shape[-1] // 8
     
-    packed_binary_tensor = torch.zeros(shape, dtype=torch.uint8)
+    packed_binary_tensor = torch.zeros(shape, dtype=torch.uint8, device=tensor.device)
     
     for i in range(8):
         packed_binary_tensor |= tensor[:, i::8] << i
@@ -129,7 +129,7 @@ class BinaryLinear_2_4(nn.Module):
     
     def pack(self, weight):
 
-        mask = mask_creator(weight).to(torch.int32)
+        mask = mask_creator(weight).to(torch.int32).to(weight.device)
         w = weight * mask
         del mask
 

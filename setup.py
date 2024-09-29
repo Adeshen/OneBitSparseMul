@@ -18,7 +18,7 @@ setup(
             include_dirs=[
                 "/root/OneBitQuantizer/OneBitSparseMul/include",
             ],
-            libraries_dir=[
+            library_dirs=[
                 "."
             ],
             libraries=[
