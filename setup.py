@@ -7,7 +7,7 @@ setup(
     author="adeshen",
     author_email="roberto.lopez.castro@udc.es",
     description="Highly optimized FP16x(INT4+2:4 sparsity) CUDA matmul kernel.",
-    install_requires=["numpy", "torch"],
+    install_requires=["numpy", "torch", "transformers"],
     packages=["onebit_sparse_mul"],
     ext_modules=[
         cpp_extension.CUDAExtension(
@@ -18,6 +18,7 @@ setup(
             include_dirs=[
                 "/root/OneBitQuantizer/OneBitSparseMul/include",
             ],
+            
             library_dirs=[
                 "."
             ],

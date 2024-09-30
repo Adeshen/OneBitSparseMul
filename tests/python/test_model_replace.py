@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
 # from thop import profile
 # from thop import clever_format
 # flops, params = profile(net, inputs=(x, ))
@@ -10,7 +10,8 @@ from transformers import AutoModel
 
 path_to_model = "/root/OneBitQuantizer/huggingface/model/TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
-model = AutoModel.from_pretrained(path_to_model).to(torch.float16).to("cuda")
+# model = AutoModel.from_pretrained(path_to_model).to(torch.float16).to("cuda")
+model = LlamaForCausalLM.from_pretrained(path_to_model).to(torch.float16).to("cuda")
 
 
 before_replace_mem = torch.cuda.memory_allocated(0)/1024/1024/1024
@@ -41,7 +42,7 @@ for idx, (n, m) in enumerate(model.named_modules()):
             total_params += m.bias.numel()
             # total_params += m.bais..numel()
         _set_module(model, n, linear)
-
+        
 after_replace_mem = torch.cuda.memory_allocated(0)/1024/1024/1024
 print("before model:{} GB".format(before_replace_mem))
 print("after model:{} GB".format(after_replace_mem))
@@ -51,5 +52,5 @@ fp16_params_memory = total_params * 16 / 8 /1024/1024/1024
 sparse_1bit_params_memory = total_params *1.5 / 8 /1024/1024/1024
 print("In our theory, before replaced total params cost:", fp16_params_memory, "GB;", 
       f"rest params mem{before_replace_mem-fp16_params_memory}GB")
-print("In our theory, after replaced total params cost:", sparse_1bit_params_memory, "GB"
+print("In our theory, after replaced total params cost:", sparse_1bit_params_memory, "GB;"
       f"rest params mem{after_replace_mem-sparse_1bit_params_memory}GB")
